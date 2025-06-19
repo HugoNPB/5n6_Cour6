@@ -1,4 +1,6 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 void main() {
   runApp(const MyApp());
@@ -6,6 +8,7 @@ void main() {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -13,26 +16,48 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
+  const MyHomePage({super.key});
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  List<String> imageNetworkPath = [];
+  List<XFile> pickedImages = [];
 
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
+  Future<void> getAndSendImage() async {
+    ImagePicker picker = ImagePicker();
+    final List<XFile> selectedFiles = await picker.pickMultiImage();
+    if (selectedFiles.isNotEmpty) {
+      for (var file in selectedFiles) {
+        pickedImages.add(file);
+      }
+    }
+
+    for (var fileImage in pickedImages) {
+      FormData formData = FormData.fromMap({
+        "file": await MultipartFile.fromFile(
+          fileImage.path,
+          filename: fileImage.name,
+        ),
+      });
+
+      Dio dio = Dio();
+      var response = await dio.post(
+        'http://10.0.2.2:8080/exos/file',
+        data: formData,
+      );
+      String id = response.data as String;
+      imageNetworkPath.add("http://10.0.2.2:8080/exos/file/$id");
+    }
+    setState(() {});
   }
 
   @override
@@ -40,25 +65,32 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
+        title: Text('Server Image Picker'),
       ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
+        child: buildListView(),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
+        onPressed: getAndSendImage,
         tooltip: 'Increment',
         child: const Icon(Icons.add),
       ),
     );
+  }
+
+  Widget buildListView() {
+    if (imageNetworkPath.isNotEmpty) {
+      return ListView.builder(
+        padding: EdgeInsets.all(10),
+        itemCount: imageNetworkPath.length,
+        itemBuilder: (BuildContext context, int index) {
+          return ListTile(
+            title: Image.network(imageNetworkPath[index],),
+          );
+        },
+      );
+    } else {
+      return Text('Selectioner une image');
+    }
   }
 }
